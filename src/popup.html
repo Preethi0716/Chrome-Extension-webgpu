@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Email Summary</title>
+    <link rel="stylesheet" href="popup.css" />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    />
+    <style>
+      /* Notification Bar */
+      #notificationBar {
+        background-color: #03c2fc;
+        color: white;
+        padding: 10px;
+        text-align: center;
+        border-radius: 5px;
+        display: none;
+        margin-bottom: 15px;
+      }
+      #notificationBar.success {
+        background-color: #4caf50;
+      }
+      #notificationBar.error {
+        background-color: #f44336;
+      }
+
+      /* Loading Spinner */
+      .loading-spinner {
+        border: 4px solid rgba(255, 255, 255, 0.3);
+        border-top: 4px solid #fff;
+        border-radius: 50%;
+        width: 30px;
+        height: 30px;
+        animation: spin 1s linear infinite;
+      }
+      @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
+
+      /* Answer Wrapper */
+      #answerWrapper {
+        display: none;
+      }
+
+      /* Copy Button */
+      .copyButton {
+        cursor: pointer;
+        padding: 5px 10px;
+        border-radius: 5px;
+        background-color: #4caf50;
+        color: white;
+        border: none;
+        font-size: 14px;
+        margin-top: 10px;
+      }
+      .copyButton:hover {
+        background-color: #45a049;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Notification Bar -->
+    <div id="notificationBar"></div>
+
+    <!-- Loading Indicator -->
+    <div id="loading-indicator" style="display: none;">
+      <div class="loading-spinner"></div>
+      <p>Fetching and summarizing email...</p>
+    </div>
+
+    <!-- Email Summary -->
+    <div id="answerWrapper">
+      <h2>Email Summary</h2>
+      <div id="answer"></div>
+      <div class="copyRow">
+        <span id="timestamp"></span>
+        <button
+          id="copyAnswer"
+          class="btn copyButton"
+          title="Copy Summary to Clipboard"
+        >
+          <i class="fa-solid fa-copy fa-lg"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Script Reference -->
+    <script type="module" src="./popup.ts"></script>
+
+    <script>
+      // Copy answer to clipboard functionality
+      document.getElementById("copyAnswer")?.addEventListener("click", () => {
+        const answerText = document.getElementById("answer")?.innerText;
+        if (answerText) {
+          navigator.clipboard.writeText(answerText).then(() => {
+            showNotification("Copied!", "Summary copied to clipboard", "success");
+          }, (err) => {
+            console.error("Error copying text: ", err);
+            showNotification("Error", "Failed to copy text", "error");
+          });
+        }
+      });
+
+      // Function to show notifications
+      function showNotification(title, message, type = "success") {
+        const notificationBar = document.getElementById("notificationBar");
+        notificationBar.textContent = `${title}: ${message}`;
+        notificationBar.className = type; // Add success/error class
+        notificationBar.style.display = "block";
+
+        setTimeout(() => {
+          notificationBar.style.display = "none";
+        }, 3000);
+      }
+    </script>
+  </body>
+</html>
