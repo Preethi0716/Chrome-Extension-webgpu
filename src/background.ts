@@ -22,7 +22,7 @@ interface PaymentData {
 
 interface PaymentSummary {
   id: number; // IndexedDB key
-  paymentDueDate: string;
+  DueDate: any;
   totalAmountDue: string;
   paymentStatus: string;
   summaryTimestamp: string;
@@ -245,7 +245,6 @@ async function checkEmails() {
         console.log(`📨 ${validEmails.length} emails matched all keywords!`);
         if (popupActive) {
           console.log("Popup is active; forwarding first valid email to popup for model processing.");
-          waitForEngine()
           chrome.runtime.sendMessage({ type: "processEmailInPopup", content: validEmails[0].content }, (response) => {
             if (chrome.runtime.lastError) {
               console.warn("Error sending message to popup:", chrome.runtime.lastError.message);
@@ -322,6 +321,12 @@ async function summarizeEmail(emailContent: string) {
       console.error("❌ Error parsing AI response:", error);
       return;
     }
+
+    console.log({
+      "Due Date": paymentData["Due Date"],
+      "Total Amount Due": paymentData["Total Amount Due"],
+      "Bank Name": paymentData["Bank Name"]
+    })
     savePaymentSummaryToIndexedDB({
       "Due Date": paymentData["Due Date"],
       "Total Amount Due": paymentData["Total Amount Due"],
@@ -378,36 +383,82 @@ function getPaymentSummariesFromIndexedDB(): Promise<PaymentSummary[]> {
   });
 }
 
+async function logAllSummaries() {
+  try {
+    const summaries = await getPaymentSummariesFromIndexedDB();
+    console.log("All saved summaries:", summaries);
+    // You could also iterate and display them as needed.
+  } catch (error) {
+    console.error("Error retrieving summaries:", error);
+  }
+}
+
 function savePaymentSummaryToIndexedDB(paymentData: any) {
   openDatabase().then((db) => {
     const transaction = db.transaction("summaries", "readwrite");
     const store = transaction.objectStore("summaries");
-    const summary = {
-      DueDate: paymentData["Due Date"],
-      totalAmountDue: paymentData["Total Amount Due"],
-      BankName: paymentData["Bank Name"],
-      paymentStatus: "unpaid",
-      summaryTimestamp: new Date().toISOString(),
+
+    // Normalize the new data for comparison.
+    const newTotal = paymentData["Total Amount Due"].replace(/[,]/g, ''); // Remove commas
+    const newDue = paymentData["Due Date"]
+
+    console.log({
+      "newTotal" : paymentData["Total Amount Due"],
+      "newDue": paymentData["Due Date"]
+    })
+
+    const getAllRequest = store.getAll();
+    getAllRequest.onsuccess = function() {
+      const existingSummaries: PaymentSummary[] = getAllRequest.result;
+      const isDuplicate = existingSummaries.some(summary => {
+        console.log({
+          "existingTotal":summary.totalAmountDue,
+          "existingDue" : summary.DueDate,
+        })
+        const existingTotal = summary.totalAmountDue.replace(/[,]/g, '');
+        const existingDue = summary.DueDate;
+        return existingTotal === newTotal && existingDue === newDue;
+      });
+      if (!isDuplicate) {
+        const summary = {
+          DueDate: newDue,
+          totalAmountDue: newTotal,
+          BankName: paymentData["Bank Name"].trim(),
+          paymentStatus: "unpaid",
+          summaryTimestamp: new Date().toISOString(),
+        };
+        store.add(summary);
+        console.log("✅ Payment summary saved to IndexedDB.");
+      } else {
+        console.log("Duplicate summary found. Not saving.");
+      } 
     };
-    store.add(summary);
-    console.log("✅ Payment summary saved to IndexedDB.");
+    getAllRequest.onerror = function() {
+      console.error("❌ Error checking for duplicate summaries in IndexedDB.");
+    };
   }).catch(err => {
     console.error("❌ Error saving summary to IndexedDB:", err);
   });
 }
 
+
 function sendNotifications() {
   getPaymentSummariesFromIndexedDB()
     .then((paymentSummaries: PaymentSummary[]) => {
-      if (paymentSummaries.length > 0) {
-        paymentSummaries.forEach((summary) => {
-          const message = `Payment Due Date: ${summary.paymentDueDate}, Total Amount Due: ${summary.totalAmountDue}, Status: ${summary.paymentStatus}`;
-          console.log("🔍 Sending notification for:", summary);
+
+      const unpaidSummaries = paymentSummaries.filter(summary => summary.paymentStatus.toLowerCase() === "unpaid");
+      
+      logAllSummaries()
+
+      if (unpaidSummaries.length > 0) {
+        unpaidSummaries.forEach((summary) => {
+          const message = `Payment Due Date: ${summary.DueDate}, Total Amount Due: ${summary.totalAmountDue}, Status: ${summary.paymentStatus}`;
+          console.log("🔍 Sending notification for unpaid payment:", summary);
           sendNotification("Payment Summary", message);
         });
       } else {
-        console.log("⚠️ No payment summaries found in IndexedDB");
-        sendNotification("No Payment Summary", "No payment summary found in IndexedDB.");
+        console.log("⚠️ No unpaid payment summaries found in IndexedDB");
+        sendNotification("No Unpaid Payments", "No unpaid payment summaries found in IndexedDB.");
       }
     })
     .catch(err => {
@@ -415,6 +466,7 @@ function sendNotifications() {
       sendNotification("Error", "An error occurred while retrieving payment summaries.");
     });
 }
+
 
 function sendNotification(title: string, message: string) {
   chrome.notifications.create({
@@ -425,6 +477,140 @@ function sendNotification(title: string, message: string) {
     priority: 2
   });
 }
+
+// ----------------------
+// New Functionality: Check for Payment Success Emails and Delete Matching DB Records
+// ----------------------
+
+// This function checks for emails indicating a successful payment using a different set of keywords.
+async function checkPaymentSuccessEmails() {
+  try {
+    // Use keywords specific to payment success mails.
+    const successKeywords = ["received", "credit", "payment"];
+    userToken = await getAuthToken(true);
+    if (!userToken) return;
+    const userEmail = await getUserEmail(userToken);
+    if (!userEmail) return;
+    console.log("📩 Checking for payment success emails for:", userEmail);
+    const query = successKeywords.map(kw => `"${kw}"`).join(" OR ");
+    console.log(`🔍 Searching payment success emails with query: ${query}`);
+    const response = await fetch(`https://www.googleapis.com/gmail/v1/users/me/messages?q=${query}&maxResults=5`, {
+      headers: { Authorization: `Bearer ${userToken}` },
+    });
+    if (!response.ok) throw new Error(response.statusText);
+    const emailData = await response.json();
+    if (emailData.messages?.length > 0) {
+      console.log(`✅ Found ${emailData.messages.length} payment success email(s)`);
+      let validEmails: { subject: string; content: string; sender: string }[] = [];
+      for (let i = 0; i < emailData.messages.length; i++) {
+        console.log(`🔄 Processing payment success email ${i + 1} of ${emailData.messages.length}...`);
+        const emailDetails = await fetchEmailDetails(emailData.messages[i].id);
+        if (!emailDetails) continue;
+        const { subject, content, sender } = emailDetails;
+        const emailText = `${subject} ${content}`.toLowerCase();
+        const containsAllKeywords = successKeywords.every(kw => emailText.includes(kw.toLowerCase()));
+        if (containsAllKeywords) {
+          console.log("✅ Payment success email meets criteria!");
+          validEmails.push({ subject, content, sender });
+        } else {
+          console.log("❌ Payment success email does NOT contain all required keywords, skipping...");
+        }
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+      if (validEmails.length === 0) {
+        console.log("📭 No payment success emails met criteria.");
+      } else {
+        console.log(`📨 ${validEmails.length} payment success emails matched criteria!`);
+        // Process the first valid payment success email in the background.
+        handlePaymentSuccess(validEmails[0].content);
+      }
+    } else {
+      console.log("📭 No payment success emails found.");
+    }
+  } catch (error) {
+    console.error("❌ Error in checkPaymentSuccessEmails:", error);
+  }
+}
+
+// This function processes the payment success email to extract the Payment Due Amount,
+// then checks the IndexedDB for any record with the same due amount, and deletes it.
+async function handlePaymentSuccess(emailContent: string) {
+  // Assume the model returns a summary with "Total Amount Due" in PaymentData.
+  if (!engine) {
+    console.warn("⏳ Engine is not initialized for payment success. Waiting...");
+    await waitForEngine();
+  }
+  if (!engine) {
+    console.error("❌ Engine failed to initialize for payment success.");
+    return;
+  }
+  console.log("🔍 (Background) Processing payment success email...");
+  // For payment success, you might have a simpler prompt; adjust as needed.
+  const prompt = `
+    From the following email content, extract the "Total Amount Due" (numeric value) that was paid.
+    Email content: "${emailContent.substring(0, MAX_EMAIL_CONTENT_LENGTH).toLowerCase()}"
+    Return your answer as JSON in the format:
+    { "Total Amount Due": "XXXX.XX" }`;
+  chatHistory.length = 0;
+  chatHistory.push({ role: "user", content: prompt });
+  try {
+    const completion = await engine.chat.completions.create({ stream: true, messages: chatHistory });
+    let curMessage = "";
+    console.log("📜 Processing AI response for payment success...");
+    for await (const chunk of completion) {
+      const curDelta = chunk.choices[0]?.delta?.content;
+      if (curDelta) {
+        curMessage += curDelta;
+      }
+    }
+    console.log("AI response for payment success:", curMessage);
+    const jsonResponse = curMessage.split("This JSON format is provided for you")[0].trim();
+    let paymentData: { "Total Amount Due": string };
+    try {
+      paymentData = JSON.parse(jsonResponse);
+    } catch (error) {
+      console.error("❌ Error parsing AI response for payment success:", error);
+      return;
+    }
+    // Now that we have the due amount from the payment success email,
+    await updateMatchingRecord(paymentData["Total Amount Due"]);
+  } catch (error) {
+    console.error("❌ Error processing payment success email:", error);
+  }
+}
+
+// This function checks the IndexedDB and updates any record whose Total Amount Due
+// matches the provided amount by setting its paymentStatus to "paid".
+async function updateMatchingRecord(amount: string) {
+  try {
+    const db = await openDatabase();
+    const transaction = db.transaction("summaries", "readwrite");
+    const store = transaction.objectStore("summaries");
+    const request = store.getAll();
+    request.onsuccess = function () {
+      const summaries: PaymentSummary[] = request.result;
+      summaries.forEach((summary) => {
+        
+        const existingTotal = parseFloat(summary.totalAmountDue).toFixed(2).replace(/[,]/g, '');
+        const newTotal = parseFloat(amount).toFixed(2).replace(/[,]/g, '');
+        if (existingTotal === newTotal && summary.paymentStatus !== "paid") {
+          console.log(`Updating summary with ID: ${summary.id} to mark as paid (amount ${newTotal}).`);
+          // Update the status to "paid"
+          summary.paymentStatus = "paid";
+          // Put the updated record back into the store.
+          store.put(summary);
+          logAllSummaries()
+        }
+      });
+    };
+    request.onerror = function () {
+      console.error("❌ Error retrieving summaries for update.");
+    };
+  } catch (error) {
+    console.error("❌ Error in updateMatchingRecord:", error);
+  }
+}
+
 
 // ----------------------
 // Event Listeners and Alarms
@@ -440,6 +626,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
   return true;
 });
+
 
 chrome.runtime.onConnect.addListener((port) => {
   console.log("🔗 Port connected:", port.name);
@@ -467,13 +654,15 @@ chrome.runtime.onInstalled.addListener(() => {
   console.log("Extension Installed - Setting up alarms and initializing engine.");
   initializeEngine().then(() => checkEmails());
   chrome.alarms.create("keepAlive", { periodInMinutes: 3 });
-  chrome.alarms.create("checkEmails", { periodInMinutes: 3 });
-  chrome.alarms.create("sendNotifications", { periodInMinutes: 5 });
+  chrome.alarms.create("checkEmails", { periodInMinutes: 15 });
+  chrome.alarms.create("sendNotification", { periodInMinutes: 10 });
+  chrome.alarms.create("checkPaymentSuccess", { periodInMinutes: 5 });
 });
 
 chrome.runtime.onStartup.addListener(() => {
   console.log("Service worker started - initializing engine and checking emails.");
   initializeEngine().then(() => checkEmails());
+  checkPaymentSuccessEmails();
 });
 
 chrome.alarms.onAlarm.addListener((alarm) => {
@@ -481,9 +670,13 @@ chrome.alarms.onAlarm.addListener((alarm) => {
     console.log("Alarm triggered: checkEmails");
     checkEmails();
   }
-  if (alarm.name === "sendNotifications") {
-    console.log("Alarm triggered: sendNotifications");
-    checkEmails();
+  if (alarm.name === "sendNotification") {
+    console.log("Alarm triggered: sendNotification");
+    sendNotifications();
+  }
+  if (alarm.name === "checkPaymentSuccess") {
+    console.log("Alarm triggered: checkPaymentSuccess");
+    checkPaymentSuccessEmails();
   }
   if (alarm.name === "keepAlive") {
     console.log("Keep Alive Alarm Triggered");

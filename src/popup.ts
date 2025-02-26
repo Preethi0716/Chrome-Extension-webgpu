@@ -98,20 +98,40 @@ function savePaymentSummaryToIndexedDB(paymentData: any) {
     const transaction = db.transaction("summaries", "readwrite");
     const store = transaction.objectStore("summaries");
 
-    const summary = {
-      DueDate: paymentData["Due Date"],
-      totalAmountDue: paymentData["Total Amount Due"],
-      BankName: paymentData["Bank Name"],
-      paymentStatus: "unpaid",
-      summaryTimestamp: new Date().toISOString(),
-    };
+    // Normalize the new data for comparison.
+    const newTotal = paymentData["Total Amount Due"].replace(/[,]/g, '');
+    const newDue = paymentData["Due Date"];
 
-    store.add(summary);
-    console.log("✅ Payment summary saved to IndexedDB.");
+    const getAllRequest = store.getAll();
+    getAllRequest.onsuccess = function() {
+      const existingSummaries: PaymentSummary[] = getAllRequest.result;
+      const isDuplicate = existingSummaries.some(summary => {
+        const existingTotal = summary.totalAmountDue.replace(/[,]/g, '');
+        const existingDue = summary.DueDate;
+        return existingTotal === newTotal && existingDue === newDue;
+      });
+      if (!isDuplicate) {
+        const summary = {
+          DueDate: newDue,
+          totalAmountDue: newTotal,
+          BankName: paymentData["Bank Name"].trim(),
+          paymentStatus: "unpaid",
+          summaryTimestamp: new Date().toISOString(),
+        };
+        store.add(summary);
+        console.log("✅ Payment summary saved to IndexedDB.");
+      } else {
+        console.log("Duplicate summary found. Not saving.");
+      } 
+    };
+    getAllRequest.onerror = function() {
+      console.error("❌ Error checking for duplicate summaries in IndexedDB.");
+    };
   }).catch(err => {
     console.error("❌ Error saving summary to IndexedDB:", err);
   });
 }
+
 
 // Retrieve payment summaries from IndexedDB
 function getPaymentSummariesFromIndexedDB(): Promise<PaymentSummary[]> {
@@ -266,7 +286,7 @@ async function summarizeEmail(emailContent: string) {
       "Card Holder Name": "XXXX"
     }`;
 
-    chatHistory.length = 0; // Clear previous history
+    chatHistory.length = 0; 
 
     chatHistory.push({ role: "user", content: prompt });
 
