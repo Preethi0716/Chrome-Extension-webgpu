@@ -36,7 +36,7 @@ async function getAuthToken(interactive = false): Promise<string | null> {
   return new Promise((resolve) => {
     chrome.identity.getAuthToken({ interactive }, (token) => {
       if (chrome.runtime.lastError || !token) {
-        console.error("❌ Authentication failed:", chrome.runtime.lastError?.message);
+        console.error(" Authentication failed:", chrome.runtime.lastError?.message);
         resolve(null);
       } else {
         resolve(token);
@@ -54,7 +54,7 @@ async function getUserEmail(token: string): Promise<string | null> {
     const userData = await response.json();
     return userData.email;
   } catch (error) {
-    console.error("❌ Failed to fetch user email:", error);
+    console.error("Failed to fetch user email:", error);
     return null;
   }
 }
@@ -63,7 +63,7 @@ function decodeBase64(encoded: string): string {
   try {
     return atob(encoded.replace(/-/g, "+").replace(/_/g, "/"));
   } catch (error) {
-    console.warn("⚠️ Error decoding Base64:", error);
+    console.warn(" Error decoding Base64:", error);
     return "";
   }
 }
@@ -123,7 +123,7 @@ async function fetchEmailDetails(messageId: string) {
     console.log(`📨 From: ${sender}\n📌 Subject: ${subject}\n📝 Body:\n${emailBody.substring(0, 10000)}...\n`);
     return { subject, content: emailBody, sender };
   } catch (error) {
-    console.error("❌ Failed to fetch email details:", error);
+    console.error(" Failed to fetch email details:", error);
     return null;
   }
 }
@@ -172,18 +172,18 @@ function parseBankSummary(emailText: string): Record<string, string> {
 async function waitForEngine() {
   let attempts = 0;
   while (!engine && attempts < 10) {
-    console.log(`🔄 Waiting for engine... Attempt ${attempts + 1}`);
+    console.log(`Waiting for engine... Attempt ${attempts + 1}`);
     await sleep(1000);
     attempts++;
   }
   if (!engine) {
-    console.warn("⚠️ Engine still not ready. Retrying initialization...");
+    console.warn(" Engine still not ready. Retrying initialization...");
     await initializeEngine();
   }
   if (!engine) {
-    console.error("❌ Engine failed to initialize.");
+    console.error("Engine failed to initialize.");
   } else {
-    console.log("🚀 Engine is ready!");
+    console.log(" Engine is ready!");
   }
 }
 
@@ -193,11 +193,11 @@ async function initializeEngine() {
     return;
   }
   try {
-    console.log("🔄 Loading model...");
+    console.log(" Loading model...");
     engine = await CreateMLCEngine("Qwen2-0.5B-Instruct-q4f16_1-MLC");
-    console.log("✅ Model loaded successfully");
+    console.log(" Model loaded successfully");
   } catch (error) {
-    console.error("❌ Error loading model:", error);
+    console.error(" Error loading model:", error);
   }
 }
 
@@ -212,37 +212,37 @@ async function checkEmails() {
     if (!userToken) return;
     const userEmail = await getUserEmail(userToken);
     if (!userEmail) return;
-    console.log("📩 Checking emails for:", userEmail);
+    console.log("Checking emails for:", userEmail);
     const keywords = ["Due Date", "Amount", "Credit Card", "Statement"];
     const query = keywords.map(kw => `"${kw}"`).join(" OR ");
-    console.log(`🔍 Searching emails with query: ${query}`);
+    console.log(` Searching emails with query: ${query}`);
     const response = await fetch(`https://www.googleapis.com/gmail/v1/users/me/messages?q=${query}&maxResults=5`, {
       headers: { Authorization: `Bearer ${userToken}` },
     });
     if (!response.ok) throw new Error(response.statusText);
     const emailData = await response.json();
     if (emailData.messages?.length > 0) {
-      console.log(`✅ Found ${emailData.messages.length} potentially relevant email(s)`);
+      console.log(` Found ${emailData.messages.length} potentially relevant email(s)`);
       let validEmails: { subject: string; content: string; sender: string }[] = [];
       for (let i = 0; i < emailData.messages.length; i++) {
-        console.log(`🔄 Processing email ${i + 1} of ${emailData.messages.length}...`);
+        console.log(` Processing email ${i + 1} of ${emailData.messages.length}...`);
         const emailDetails = await fetchEmailDetails(emailData.messages[i].id);
         if (!emailDetails) continue;
         const { subject, content, sender } = emailDetails;
         const emailText = `${subject} ${content}`.toLowerCase();
         const containsAllKeywords = keywords.every(kw => emailText.includes(kw.toLowerCase()));
         if (containsAllKeywords) {
-          console.log("✅ Email meets all keyword criteria!");
+          console.log(" Email meets all keyword criteria!");
           validEmails.push({ subject, content, sender });
         } else {
-          console.log("❌ Email does NOT contain all required keywords, skipping...");
+          console.log(" Email does NOT contain all required keywords, skipping...");
         }
         await new Promise(resolve => setTimeout(resolve, 1000));
       }
       if (validEmails.length === 0) {
-        console.log("📭 No emails met all keyword criteria.");
+        console.log(" No emails met all keyword criteria.");
       } else {
-        console.log(`📨 ${validEmails.length} emails matched all keywords!`);
+        console.log(` ${validEmails.length} emails matched all keywords!`);
         if (popupActive) {
           console.log("Popup is active; forwarding first valid email to popup for model processing.");
           chrome.runtime.sendMessage({ type: "processEmailInPopup", content: validEmails[0].content }, (response) => {
@@ -261,18 +261,18 @@ async function checkEmails() {
       console.log("📭 No relevant emails found.");
     }
   } catch (error) {
-    console.error("❌ Error in checkEmails:", error);
+    console.error("Error in checkEmails:", error);
   }
 }
 
 // Process email content and summarize it (in the background).
 async function summarizeEmail(emailContent: string) {
   if (!engine) {
-    console.warn("⏳ Engine is not initialized. Waiting...");
+    console.warn("Engine is not initialized. Waiting...");
     await waitForEngine();
   }
   if (!engine) {
-    console.error("❌ Engine failed to initialize.");
+    console.error(" Engine failed to initialize.");
     return;
   }
   console.log("🔍 (Background) Sending email for summarization...");
@@ -303,7 +303,7 @@ async function summarizeEmail(emailContent: string) {
   try {
     const completion = await engine.chat.completions.create({ stream: true, messages: chatHistory });
     let curMessage = "";
-    console.log("📜 Processing AI response...");
+    console.log("Processing AI response...");
     for await (const chunk of completion) {
       const curDelta = chunk.choices[0]?.delta?.content;
       if (curDelta) {
@@ -318,7 +318,7 @@ async function summarizeEmail(emailContent: string) {
     try {
       paymentData = JSON.parse(jsonResponse);
     } catch (error) {
-      console.error("❌ Error parsing AI response:", error);
+      console.error("Error parsing AI response:", error);
       return;
     }
 
@@ -335,7 +335,7 @@ async function summarizeEmail(emailContent: string) {
 
     sendNotifications();
   } catch (error) {
-    console.error("❌ Error summarizing email:", error);
+    console.error("Error summarizing email:", error);
   }
 }
 
@@ -351,9 +351,9 @@ function openDatabase(): Promise<IDBDatabase> {
         if (!db.objectStoreNames.contains("summaries")) {
           db.createObjectStore("summaries", { keyPath: "id", autoIncrement: true });
         }
-        console.log("✅ Object store 'summaries' created.");
+        console.log(" Object store 'summaries' created.");
       } else {
-        console.error("❌ Unable to access the database during upgrade.");
+        console.error(" Unable to access the database during upgrade.");
       }
     };
     request.onerror = function() {
@@ -362,7 +362,7 @@ function openDatabase(): Promise<IDBDatabase> {
     request.onsuccess = function(event) {
       const db = (event.target as IDBRequest).result;
       resolve(db);
-      console.log("✅ Database opened successfully.");
+      console.log("Database opened successfully.");
     };
   });
 }
@@ -428,16 +428,16 @@ function savePaymentSummaryToIndexedDB(paymentData: any) {
           summaryTimestamp: new Date().toISOString(),
         };
         store.add(summary);
-        console.log("✅ Payment summary saved to IndexedDB.");
+        console.log(" Payment summary saved to IndexedDB.");
       } else {
         console.log("Duplicate summary found. Not saving.");
       } 
     };
     getAllRequest.onerror = function() {
-      console.error("❌ Error checking for duplicate summaries in IndexedDB.");
+      console.error("Error checking for duplicate summaries in IndexedDB.");
     };
   }).catch(err => {
-    console.error("❌ Error saving summary to IndexedDB:", err);
+    console.error("Error saving summary to IndexedDB:", err);
   });
 }
 
@@ -457,12 +457,12 @@ function sendNotifications() {
           sendNotification("Payment Summary", message);
         });
       } else {
-        console.log("⚠️ No unpaid payment summaries found in IndexedDB");
+        console.log("No unpaid payment summaries found in IndexedDB");
         sendNotification("No Unpaid Payments", "No unpaid payment summaries found in IndexedDB.");
       }
     })
     .catch(err => {
-      console.error("❌ Error retrieving payment summaries from IndexedDB:", err);
+      console.error(" Error retrieving payment summaries from IndexedDB:", err);
       sendNotification("Error", "An error occurred while retrieving payment summaries.");
     });
 }
@@ -491,36 +491,36 @@ async function checkPaymentSuccessEmails() {
     if (!userToken) return;
     const userEmail = await getUserEmail(userToken);
     if (!userEmail) return;
-    console.log("📩 Checking for payment success emails for:", userEmail);
+    console.log("Checking for payment success emails for:", userEmail);
     const query = successKeywords.map(kw => `"${kw}"`).join(" OR ");
-    console.log(`🔍 Searching payment success emails with query: ${query}`);
+    console.log(`Searching payment success emails with query: ${query}`);
     const response = await fetch(`https://www.googleapis.com/gmail/v1/users/me/messages?q=${query}&maxResults=5`, {
       headers: { Authorization: `Bearer ${userToken}` },
     });
     if (!response.ok) throw new Error(response.statusText);
     const emailData = await response.json();
     if (emailData.messages?.length > 0) {
-      console.log(`✅ Found ${emailData.messages.length} payment success email(s)`);
+      console.log(`Found ${emailData.messages.length} payment success email(s)`);
       let validEmails: { subject: string; content: string; sender: string }[] = [];
       for (let i = 0; i < emailData.messages.length; i++) {
-        console.log(`🔄 Processing payment success email ${i + 1} of ${emailData.messages.length}...`);
+        console.log(` Processing payment success email ${i + 1} of ${emailData.messages.length}...`);
         const emailDetails = await fetchEmailDetails(emailData.messages[i].id);
         if (!emailDetails) continue;
         const { subject, content, sender } = emailDetails;
         const emailText = `${subject} ${content}`.toLowerCase();
         const containsAllKeywords = successKeywords.every(kw => emailText.includes(kw.toLowerCase()));
         if (containsAllKeywords) {
-          console.log("✅ Payment success email meets criteria!");
+          console.log(" Payment success email meets criteria!");
           validEmails.push({ subject, content, sender });
         } else {
-          console.log("❌ Payment success email does NOT contain all required keywords, skipping...");
+          console.log("Payment success email does NOT contain all required keywords, skipping...");
         }
         await new Promise(resolve => setTimeout(resolve, 1000));
       }
       if (validEmails.length === 0) {
-        console.log("📭 No payment success emails met criteria.");
+        console.log(" No payment success emails met criteria.");
       } else {
-        console.log(`📨 ${validEmails.length} payment success emails matched criteria!`);
+        console.log(` ${validEmails.length} payment success emails matched criteria!`);
         // Process the first valid payment success email in the background.
         handlePaymentSuccess(validEmails[0].content);
       }
@@ -528,7 +528,7 @@ async function checkPaymentSuccessEmails() {
       console.log("📭 No payment success emails found.");
     }
   } catch (error) {
-    console.error("❌ Error in checkPaymentSuccessEmails:", error);
+    console.error("Error in checkPaymentSuccessEmails:", error);
   }
 }
 
@@ -537,14 +537,14 @@ async function checkPaymentSuccessEmails() {
 async function handlePaymentSuccess(emailContent: string) {
   // Assume the model returns a summary with "Total Amount Due" in PaymentData.
   if (!engine) {
-    console.warn("⏳ Engine is not initialized for payment success. Waiting...");
+    console.warn(" Engine is not initialized for payment success. Waiting...");
     await waitForEngine();
   }
   if (!engine) {
-    console.error("❌ Engine failed to initialize for payment success.");
+    console.error(" Engine failed to initialize for payment success.");
     return;
   }
-  console.log("🔍 (Background) Processing payment success email...");
+  console.log(" (Background) Processing payment success email...");
   // For payment success, you might have a simpler prompt; adjust as needed.
   const prompt = `
     From the following email content, extract the "Total Amount Due" (numeric value) that was paid.
@@ -556,7 +556,7 @@ async function handlePaymentSuccess(emailContent: string) {
   try {
     const completion = await engine.chat.completions.create({ stream: true, messages: chatHistory });
     let curMessage = "";
-    console.log("📜 Processing AI response for payment success...");
+    console.log("Processing AI response for payment success...");
     for await (const chunk of completion) {
       const curDelta = chunk.choices[0]?.delta?.content;
       if (curDelta) {
@@ -569,13 +569,13 @@ async function handlePaymentSuccess(emailContent: string) {
     try {
       paymentData = JSON.parse(jsonResponse);
     } catch (error) {
-      console.error("❌ Error parsing AI response for payment success:", error);
+      console.error(" Error parsing AI response for payment success:", error);
       return;
     }
     // Now that we have the due amount from the payment success email,
     await updateMatchingRecord(paymentData["Total Amount Due"]);
   } catch (error) {
-    console.error("❌ Error processing payment success email:", error);
+    console.error(" Error processing payment success email:", error);
   }
 }
 
@@ -604,10 +604,10 @@ async function updateMatchingRecord(amount: string) {
       });
     };
     request.onerror = function () {
-      console.error("❌ Error retrieving summaries for update.");
+      console.error(" Error retrieving summaries for update.");
     };
   } catch (error) {
-    console.error("❌ Error in updateMatchingRecord:", error);
+    console.error(" Error in updateMatchingRecord:", error);
   }
 }
 
@@ -629,19 +629,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 
 chrome.runtime.onConnect.addListener((port) => {
-  console.log("🔗 Port connected:", port.name);
+  console.log(" Port connected:", port.name);
   if (port.name === "web_llm_service_worker") {
     popupActive = true;
     if (!handler) {
-      console.log("🛠️ Initializing new MLCEngineHandler...");
+      console.log(" Initializing new MLCEngineHandler...");
       handler = new ExtensionServiceWorkerMLCEngineHandler(port);
     } else {
-      console.log("🔄 Reusing existing handler...");
+      console.log("Reusing existing handler...");
       handler.setPort(port);
     }
     port.onMessage.addListener(handler.onmessage.bind(handler));
     port.onDisconnect.addListener(() => {
-      console.warn("⚠️ Popup disconnected, resetting handler...");
+      console.warn(" Popup disconnected, resetting handler...");
       handler = undefined;
       popupActive = false;
     });
@@ -654,9 +654,9 @@ chrome.runtime.onInstalled.addListener(() => {
   console.log("Extension Installed - Setting up alarms and initializing engine.");
   initializeEngine().then(() => checkEmails());
   chrome.alarms.create("keepAlive", { periodInMinutes: 3 });
-  chrome.alarms.create("checkEmails", { periodInMinutes: 15 });
-  chrome.alarms.create("sendNotification", { periodInMinutes: 10 });
-  chrome.alarms.create("checkPaymentSuccess", { periodInMinutes: 5 });
+  chrome.alarms.create("checkEmails", { periodInMinutes: 5 });
+  chrome.alarms.create("sendNotification", { periodInMinutes: 7 });
+  chrome.alarms.create("checkPaymentSuccess", { periodInMinutes: 3 });
 });
 
 chrome.runtime.onStartup.addListener(() => {

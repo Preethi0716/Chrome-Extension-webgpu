@@ -9,7 +9,7 @@ import {
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-console.log("📌 Initializing Popup...");
+console.log(" Initializing Popup...");
 
 const MAX_EMAIL_CONTENT_LENGTH = 4096; 
 
@@ -19,13 +19,13 @@ const chatHistory: ChatCompletionMessageParam[] = [];
 // Initialize the model
 async function initializeEngine() {
   try {
-    console.log("🔄 Loading model...");
+    console.log(" Loading model...");
     engine = await CreateExtensionServiceWorkerMLCEngine(
       "Qwen2-0.5B-Instruct-q4f16_1-MLC"
     );
-    console.log("✅ Model loaded successfully");
+    console.log(" Model loaded successfully");
   } catch (error) {
-    console.error("❌ Error loading model:", error);
+    console.error(" Error loading model:", error);
   }
 }
 
@@ -45,7 +45,7 @@ interface PaymentSummary {
 
 // Function to send Chrome Notification
 function sendNotification(title: string, message: string) {
-  console.log("📢 Sending notification:", title, message); 
+  console.log(" Sending notification:", title, message); 
 
   chrome.notifications.create({
     type: 'basic',
@@ -55,7 +55,7 @@ function sendNotification(title: string, message: string) {
     priority: 2
   }, (notificationId) => {
     if (chrome.runtime.lastError) {
-      console.error("❌ Error creating notification:", chrome.runtime.lastError.message);
+      console.error(" Error creating notification:", chrome.runtime.lastError.message);
     } else {
       console.log( `Notification created with ID: ${notificationId}`);
     }
@@ -74,9 +74,9 @@ function openDatabase() {
         if (!db.objectStoreNames.contains("summaries")) {
           db.createObjectStore("summaries", { keyPath: "id", autoIncrement: true });
         }
-        console.log("✅ Object store 'summaries' created.");
+        console.log(" Object store 'summaries' created.");
       } else {
-        console.error("❌ Unable to access the database during upgrade.");
+        console.error(" Unable to access the database during upgrade.");
       }
     };
 
@@ -87,7 +87,7 @@ function openDatabase() {
     request.onsuccess = function(event) {
       const db = (event.target as IDBRequest).result;
       resolve(db);
-      console.log("✅ Database opened successfully.");
+      console.log(" Database opened successfully.");
     };
   });
 }
@@ -119,16 +119,16 @@ function savePaymentSummaryToIndexedDB(paymentData: any) {
           summaryTimestamp: new Date().toISOString(),
         };
         store.add(summary);
-        console.log("✅ Payment summary saved to IndexedDB.");
+        console.log(" Payment summary saved to IndexedDB.");
       } else {
         console.log("Duplicate summary found. Not saving.");
       } 
     };
     getAllRequest.onerror = function() {
-      console.error("❌ Error checking for duplicate summaries in IndexedDB.");
+      console.error(" Error checking for duplicate summaries in IndexedDB.");
     };
   }).catch(err => {
-    console.error("❌ Error saving summary to IndexedDB:", err);
+    console.error(" Error saving summary to IndexedDB:", err);
   });
 }
 
@@ -160,7 +160,7 @@ function updateAnswer(summary: string) {
   const timestampElement = document.getElementById("timestamp");
 
   if (!answerWrapper || !answerElement || !loadingIndicator || !timestampElement) {
-    console.error("❌ Missing required DOM elements in updateAnswer()");
+    console.error(" Missing required DOM elements in updateAnswer()");
     return;
   }
 
@@ -235,17 +235,17 @@ function parseBankSummary(emailText: string): Record<string, string> {
 // Function to process email content and summarize it
 async function summarizeEmail(emailContent: string) {
   if (!engine) {
-    console.warn("⏳ Engine is not initialized. Waiting...");
+    console.warn(" Engine is not initialized. Waiting...");
     await waitForEngine();
   }
 
   if (!engine) {
-    console.error("❌ Engine failed to initialize.");
-    updateAnswer("⚠️ Unable to process email.");
+    console.error(" Engine failed to initialize.");
+    updateAnswer(" Unable to process email.");
     return;
   }
 
-  console.log("🔍 Sending email for summarization...");
+  console.log(" Sending email for summarization...");
 
 
   let truncatedEmailContent = emailContent;
@@ -295,7 +295,7 @@ async function summarizeEmail(emailContent: string) {
     let curMessage = "";
 
 
-    console.log("📜 Processing AI response...");
+    console.log(" Processing AI response...");
     for await (const chunk of completion) {
       const curDelta = chunk.choices[0]?.delta?.content;
       if (curDelta) {
@@ -317,7 +317,7 @@ async function summarizeEmail(emailContent: string) {
     try {
       paymentData = JSON.parse(jsonResponse);
     } catch (error) {
-      console.error("❌ Error parsing AI response:", error);
+      console.error(" Error parsing AI response:", error);
       return;
     }
 
@@ -330,7 +330,7 @@ async function summarizeEmail(emailContent: string) {
 
 
     // const notificationMessage = `Payment Due Date: ${paymentData["Due Date"]}, Total Amount Due: ${paymentData["Total Amount Due"]}, Status: unpaid`;
-    // console.log("📢 Sending notification:", notificationMessage); 
+    // console.log(" Sending notification:", notificationMessage); 
 
     // chrome.runtime.sendMessage({
     //   type: "sendNotification",
@@ -340,7 +340,7 @@ async function summarizeEmail(emailContent: string) {
     notifyFromIndexedDB() 
 
   } catch (error) {
-    console.error("❌ Error summarizing email:", error);
+    console.error(" Error summarizing email:", error);
   }
 }
 
@@ -348,19 +348,19 @@ async function summarizeEmail(emailContent: string) {
 chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
   try {
     if (message.type === "emailData") {
-      console.log("📨 Received Email Data:", message.emails);
+      console.log(" Received Email Data:", message.emails);
 
       if (!message.emails || message.emails.length === 0) {
-        console.warn("⚠️ No valid emails received.");
+        console.warn(" No valid emails received.");
         sendResponse({ success: false, message: "No valid emails found" });
         return;
       }
   
       const email = message.emails[0]; // Take the first valid email
-      console.log("📩 Processing Email:", email);
+      console.log(" Processing Email:", email);
   
       if (!engine) {
-        console.warn("⏳ Engine not initialized. Waiting...");
+        console.warn(" Engine not initialized. Waiting...");
         await waitForEngine();
       }
 
@@ -368,12 +368,12 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
         await summarizeEmail(message.emails[0]?.content);
         sendResponse({ success: true, message: "Email processed successfully" });
       } else {
-        console.error("❌ Engine failed to initialize.");
+        console.error(" Engine failed to initialize.");
         sendResponse({ success: false, message: "Engine failed to initialize" });
       }
     }
   } catch (error) {
-    console.error("❌ Message processing error:", error);
+    console.error(" Message processing error:", error);
     sendResponse({ success: false, message: "Unexpected error occurred" });
   }
 
@@ -384,27 +384,27 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
 async function waitForEngine() {
   let attempts = 0;
   while (!engine && attempts < 10) {
-    console.log(`🔄 Waiting for engine... Attempt ${attempts + 1}`);
+    console.log(` Waiting for engine... Attempt ${attempts + 1}`);
     await sleep(1000);
     attempts++;
   }
 
   if (!engine) {
-    console.warn("⚠️ Engine still not ready. Retrying initialization...");
+    console.warn(" Engine still not ready. Retrying initialization...");
     await initializeEngine(); // 🔥 Try initializing again
   }
 
   if (!engine) {
-    console.error("❌ Engine failed to initialize.");
+    console.error(" Engine failed to initialize.");
   } else {
-    console.log("🚀 Engine is ready!");
+    console.log(" Engine is ready!");
   }
 }
 
 
 // Wait for DOM before initializing
 document.addEventListener("DOMContentLoaded", async () => {
-  console.log("📌 DOM loaded, initializing engine...");
+  console.log(" DOM loaded, initializing engine...");
   await initializeEngine();
   
 });
@@ -415,14 +415,14 @@ function notifyFromIndexedDB() {
     if (paymentSummaries.length > 0) {
       const latestSummary = paymentSummaries[paymentSummaries.length - 1]; // Get the latest payment summary
       const message = `Payment Due Date: ${latestSummary.DueDate}, Total Amount Due: ${latestSummary.totalAmountDue}, Status: ${latestSummary.paymentStatus}`;
-      console.log("🔍 Payment summary found in IndexedDB:", latestSummary); 
+      console.log(" Payment summary found in IndexedDB:", latestSummary); 
       sendNotification("Payment Summary", message);
     } else {
-      console.log("⚠️ No payment summaries found in IndexedDB");
+      console.log(" No payment summaries found in IndexedDB");
       sendNotification("No Payment Summary", "No payment summary found in IndexedDB.");
     }
   }).catch(err => {
-    console.error("❌ Error retrieving payment summaries from IndexedDB:", err);
+    console.error(" Error retrieving payment summaries from IndexedDB:", err);
     sendNotification("Error", "An error occurred while retrieving payment summaries.");
   });
 }
