@@ -274,7 +274,7 @@ async function summarizeEmail(emailContent: string) {
   const prompt = `
     Extract the following from the inputs provided:
 
-    1. From the email below, extract only the bank name and cardholder name from the email content "${truncatedEmailContent}". 
+    1. From the email below, extract only the bank name from the email content "${truncatedEmailContent}". 
     
     2. From the dictionary below, extract only the Payment Due Date and Total Amount Due from Dictionary: ${JSON.stringify(summaryDict)}. 
 
@@ -283,7 +283,6 @@ async function summarizeEmail(emailContent: string) {
       "Due Date": "DD-MM-YYYY",
       "Total Amount Due": "XXXX.XX",
       "Bank Name": "XXXX",
-      "Card Holder Name": "XXXX"
     }`;
 
     chatHistory.length = 0; 

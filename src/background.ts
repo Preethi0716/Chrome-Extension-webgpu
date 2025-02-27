@@ -52,12 +52,13 @@ async function getUserEmail(token: string): Promise<string | null> {
     });
     if (!response.ok) throw new Error(response.statusText);
     const userData = await response.json();
-    return userData.email;
+    return userData.name;
   } catch (error) {
     console.error("Failed to fetch user email:", error);
     return null;
   }
 }
+
 
 function decodeBase64(encoded: string): string {
   try {
@@ -290,14 +291,13 @@ async function summarizeEmail(emailContent: string) {
   const prompt = `
     Extract the following from the inputs provided:
 
-    1. From the email below, extract only the bank name and cardholder name from the email content "${truncatedEmailContent}". 
+    1. From the email below, extract only the bank name from the email content "${truncatedEmailContent}". 
     2. From the dictionary below, extract only the Payment Due Date and Total Amount Due from Dictionary: ${JSON.stringify(summaryDict)}. 
     Combine the results from 1 and 2 and return it as JSON in the following format:
     {
       "Due Date": "DD-MM-YYYY",
       "Total Amount Due": "XXXX.XX",
       "Bank Name": "XXXX",
-      "Card Holder Name": "XXXX"
     }`;
   chatHistory.push({ role: "user", content: prompt });
   try {
@@ -454,7 +454,7 @@ function sendNotifications() {
         unpaidSummaries.forEach((summary) => {
           const message = `Payment Due Date: ${summary.DueDate}, Total Amount Due: ${summary.totalAmountDue}, Status: ${summary.paymentStatus}`;
           console.log("🔍 Sending notification for unpaid payment:", summary);
-          sendNotification("Payment Summary", message);
+          sendNotification(`Payment Summary for ${getUserEmail}`, message);
         });
       } else {
         console.log("No unpaid payment summaries found in IndexedDB");
