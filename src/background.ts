@@ -7,7 +7,7 @@ import {
 } from "@mlc-ai/web-llm";
 
 let handler: ExtensionServiceWorkerMLCEngineHandler | undefined;
-let userToken: string | null = null;
+let userToken: any;
 let engine: MLCEngineInterface | null = null;
 const chatHistory: ChatCompletionMessageParam[] = [];
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -299,6 +299,7 @@ async function summarizeEmail(emailContent: string) {
       "Total Amount Due": "XXXX.XX",
       "Bank Name": "XXXX",
     }`;
+
   chatHistory.push({ role: "user", content: prompt });
   try {
     const completion = await engine.chat.completions.create({ stream: true, messages: chatHistory });
@@ -442,7 +443,7 @@ function savePaymentSummaryToIndexedDB(paymentData: any) {
 }
 
 
-function sendNotifications() {
+async function sendNotifications() {
   getPaymentSummariesFromIndexedDB()
     .then((paymentSummaries: PaymentSummary[]) => {
 
@@ -451,10 +452,16 @@ function sendNotifications() {
       logAllSummaries()
 
       if (unpaidSummaries.length > 0) {
-        unpaidSummaries.forEach((summary) => {
+        unpaidSummaries.forEach(async (summary) => {
           const message = `Payment Due Date: ${summary.DueDate}, Total Amount Due: ${summary.totalAmountDue}, Status: ${summary.paymentStatus}`;
           console.log("🔍 Sending notification for unpaid payment:", summary);
-          sendNotification(`Payment Summary for ${getUserEmail}`, message);
+          
+          userToken =  await getAuthToken(true);
+          if (!userToken) return;
+          const userEmail = await getUserEmail(userToken);
+          if (!userEmail) return;
+
+          sendNotification(`Payment Summary for ${userEmail}`, message);
         });
       } else {
         console.log("No unpaid payment summaries found in IndexedDB");
@@ -532,8 +539,7 @@ async function checkPaymentSuccessEmails() {
   }
 }
 
-// This function processes the payment success email to extract the Payment Due Amount,
-// then checks the IndexedDB for any record with the same due amount, and deletes it.
+// This function processes the payment success email to extract the Payment Due Amount, then checks the IndexedDB for any record with the same due amount, and deletes it.
 async function handlePaymentSuccess(emailContent: string) {
   // Assume the model returns a summary with "Total Amount Due" in PaymentData.
   if (!engine) {
@@ -579,8 +585,7 @@ async function handlePaymentSuccess(emailContent: string) {
   }
 }
 
-// This function checks the IndexedDB and updates any record whose Total Amount Due
-// matches the provided amount by setting its paymentStatus to "paid".
+// This function checks the IndexedDB and updates any record whose Total Amount Due matches the provided amount by setting its paymentStatus to "paid".
 async function updateMatchingRecord(amount: string) {
   try {
     const db = await openDatabase();

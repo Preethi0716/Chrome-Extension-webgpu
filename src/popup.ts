@@ -1,5 +1,6 @@
 "use strict";
 
+import { CreateMLCEngine } from "@mlc-ai/web-llm";
 import "./popup.css";
 import {
   ChatCompletionMessageParam,
@@ -20,7 +21,7 @@ const chatHistory: ChatCompletionMessageParam[] = [];
 async function initializeEngine() {
   try {
     console.log(" Loading model...");
-    engine = await CreateExtensionServiceWorkerMLCEngine(
+    engine = await CreateMLCEngine(
       "Qwen2-0.5B-Instruct-q4f16_1-MLC"
     );
     console.log(" Model loaded successfully");
